@@ -3,6 +3,14 @@ from enum import Enum, auto
 import sys
 from exceptions import ScannerException
 
+class LexerContext(Enum):
+    OPCODE = auto()
+    CONST = auto()
+    VAR = auto()
+    TYPE = auto()
+    NEWLINE = auto()
+    LABEL = auto()
+    HEADER = auto()
 
 class TokenType(Enum):
     VAR = 0
@@ -71,14 +79,12 @@ class Token:
 class Scanner:
     def __init__(self, file):
         self.file = file
+        self.context = None
         # Definice regulárních výrazů pro různé typy tokenů
+        self.wordRegex = r'\S+';
+        
         self.token_specs = [
             ("HEADER",      r'\.IPPcode24'),          # Hlavička kódu
-            #("KEYWORD",     r'\b(MOVE|CREATEFRAME|PUSHFRAME|POPFRAME|DEFVAR|' \
-            #                r'CALL|RETURN|PUSHS|POPS|ADD|SUB|MUL|IDIV|LT|GT|' \
-            #                r'EQ|AND|OR|NOT|CONCAT|GETCHAR|SETCHAR|INT2CHAR|' \
-            #                r'STRI2INT|READ|WRITE|STRLEN|TYPE|LABEL|JUMP|' \
-            #                r'JUMPIFEQ|JUMPIFNEQ|EXIT|DPRINT|BREAK)\b'),
             ("VAR",         r'\b(LF|TF|GF)@([A-Za-z_\-&%*!?][A-Za-z0-9_\-&%*!?]*)\b'),
             ("INT",         r'\b(int)@(-?(?:0x[0-9A-Fa-f]+|0o[0-7]+|0[0-7]*|[1-9][0-9]*|0))\b'),
             ("BOOL",        r'\b(bool)@(true|false)\b'),
@@ -108,8 +114,25 @@ class Scanner:
         for mo in re.finditer(self.tok_regex, self.file.read()):
             kind = mo.lastgroup
             value = mo.group()
+
             if kind == "WHITESPACE" or kind == "COMMENT":
                 continue  # Ignoruj bílé znaky a komentáře
+
+            if self.context == LexerContext.HEADER:
+                pass
+            elif self.context == LexerContext.CONST:
+                pass
+            elif self.context == LexerContext.VAR:
+                pass
+            elif self.context == LexerContext.LABEL:
+                pass
+            elif self.context == LexerContext.NEWLINE:
+                pass
+            elif self.context == LexerContext.OPCODE:
+                pass
+            elif self.context == LexerContext.TYPE:
+                pass
+            
             elif kind == "NEWLINE":
                 yield Token(TokenType.NEWLINE)  # Příklad, jak vytvořit token pro nový řádek
             elif kind == "HEADER":
