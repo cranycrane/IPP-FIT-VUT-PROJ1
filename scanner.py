@@ -8,7 +8,7 @@ class LexerContext(Enum):
     CONST = auto()
     VAR = auto()
     TYPE = auto()
-    NEWLINE = auto()
+    #NEWLINE = auto()
     LABEL = auto()
     HEADER = auto()
 
@@ -81,23 +81,29 @@ class Scanner:
         self.file = file
         self.context = None
         # Definice regulárních výrazů pro různé typy tokenů
-        self.wordRegex = r'\S+';
-        
-        self.token_specs = [
-            ("HEADER",      r'\.IPPcode24'),          # Hlavička kódu
-            ("VAR",         r'\b(LF|TF|GF)@([A-Za-z_\-&%*!?][A-Za-z0-9_\-&%*!?]*)\b'),
+        self.wordRegex = [
+            ("COMMENT", r'#.*'),
+            ("WHITESPACE",  r'[ \t\v\f\r]+'),
+            ("WORD", r'\S+'),
+            ("NEWLINE", r'\n')
+        ]
+
+        self.headerRegex = r'(?i)\.IPPcode24'
+        self.opcodeRegex = r'\b(?i)(MOVE|CREATEFRAME|PUSHFRAME|POPFRAME|DEFVAR|' \
+                            r'CALL|RETURN|PUSHS|POPS|ADD|SUB|MUL|IDIV|LT|GT|' \
+                            r'EQ|AND|OR|NOT|CONCAT|GETCHAR|SETCHAR|INT2CHAR|' \
+                            r'STRI2INT|READ|WRITE|STRLEN|TYPE|LABEL|JUMP|' \
+                            r'JUMPIFEQ|JUMPIFNEQ|EXIT|DPRINT|BREAK)\b'
+        self.constRegex = [
             ("INT",         r'\b(int)@(-?(?:0x[0-9A-Fa-f]+|0o[0-7]+|0[0-7]*|[1-9][0-9]*|0))\b'),
             ("BOOL",        r'\b(bool)@(true|false)\b'),
             ("STRING",      r'\b(string)@(?:[^\s#\\]|\\[0-9]{3})*'),
-            ("NIL",      r'\b(nil)@(nil)*\b'),
-            ("TYPE",        r'\b(int|string|bool)\b'),
-            ("LABEL",       r'\b([A-Za-z_\-&%*!?][A-Za-z0-9_\-&%*!?]*)\b'),
-            #("CONSTANT",    r'\b(int|bool|string|nil)@[A-Za-z0-9_\-]*'),
-            ("WHITESPACE",  r'[ \t\v\f\r]+'),  # Bílé znaky, ignorovány, kromě nového řádku
-            ("NEWLINE",     r'\n'),            # Nový řádek
-            ("COMMENT",     r'#.*'),                  # Komentáře
-            ("UNKNOWN",     r'.+'),  # Neznámé tokeny
+            ("NIL",         r'nil@nil')
         ]
+
+        self.varRegex = r'\b(LF|TF|GF)@[A-Za-z_$&%*!?-][A-Za-z0-9_$&%*!?-]*\b'
+        self.typeRegex = r'\b(int|string|bool)\b'
+        self.labelRegex = r'[A-Za-z_$&%*!?-][A-Za-z0-9_$&%*!?-]*\b'
 
         keywords = r'\b(?i)(MOVE|CREATEFRAME|PUSHFRAME|POPFRAME|DEFVAR|' \
                             r'CALL|RETURN|PUSHS|POPS|ADD|SUB|MUL|IDIV|LT|GT|' \
@@ -107,60 +113,67 @@ class Scanner:
         self.keywordRegex = re.compile(keywords)
 
         # Kompilace regulárních výrazů do patternů
-        self.tok_regex = '|'.join('(?P<%s>%s)' % pair for pair in self.token_specs)
-
+        #self.tok_regex = '|'.join('(?P<%s>%s)' % pair for pair in self.token_specs)
+        self.wordsRegex = '|'.join('(?P<%s>%s)' % pair for pair in self.wordRegex)
     # Funkce lexikálního analyzátoru
     def __iter__(self):
-        for mo in re.finditer(self.tok_regex, self.file.read()):
+        
+        for mo in re.finditer(self.wordsRegex, self.file.read()):
             kind = mo.lastgroup
             value = mo.group()
-
-            if kind == "WHITESPACE" or kind == "COMMENT":
-                continue  # Ignoruj bílé znaky a komentáře
+            print(f"{value} a {kind} a {self.context}")
+            if kind == "COMMENT" or kind == "WHITESPACE":
+                continue
+            elif kind == "NEWLINE":
+                yield Token(TokenType.NEWLINE)
+                continue
 
             if self.context == LexerContext.HEADER:
-                pass
+                match = re.search(self.headerRegex, value)
+                if match:
+                    yield Token(TokenType.HEADER)
             elif self.context == LexerContext.CONST:
-                pass
+                match = re.match(self.varRegex, value)
+                if match:
+                    #print("NASEL")
+                    yield Token(TokenType.VAR, value)
+                    continue
+
+                for dataType, regex in self.constRegex:
+                    match = re.match(regex, value)
+                    if match:
+                        tokenType = getattr(TokenType, dataType, None)
+                        yield Token(tokenType, value.split('@',1)[1])
+                        break
+
             elif self.context == LexerContext.VAR:
-                pass
+                match = re.match(self.varRegex, value)
+                if match:
+                      yield Token(TokenType.VAR, value)
             elif self.context == LexerContext.LABEL:
-                pass
-            elif self.context == LexerContext.NEWLINE:
-                pass
+                match = re.match(self.labelRegex, value)
+                if match:
+                    yield Token(TokenType.LABEL, value)
+            #elif self.context == LexerContext.NEWLINE:
+            #    yield Token(TokenType.NEWLINE)
             elif self.context == LexerContext.OPCODE:
-                pass
-            elif self.context == LexerContext.TYPE:
-                pass
-            
-            elif kind == "NEWLINE":
-                yield Token(TokenType.NEWLINE)  # Příklad, jak vytvořit token pro nový řádek
-            elif kind == "HEADER":
-                yield Token(TokenType.HEADER)
-            elif kind == "VAR":
-                yield Token(TokenType.VAR, value)
-            elif kind == "INT":
-                yield Token(TokenType.INT, value.split('@',1)[1])
-            elif kind == "BOOL":
-                yield Token(TokenType.BOOL, value.split('@',1)[1])
-            elif kind == "STRING":
-                yield Token(TokenType.STRING, value.split('@',1)[1])
-            elif kind == "NIL":
-                yield Token(TokenType.NIL, "nil")
-            elif kind == "TYPE":
-                yield Token(TokenType.TYPE, value)
-            elif kind == "LABEL":
-                keyword = re.search(self.keywordRegex, value)
-                if keyword:
-                    keyword_type = getattr(KeywordType, keyword.group().upper(), None)  # Získání KeywordType hodnoty
+                match = re.search(self.keywordRegex, value)
+                if match:
+                    keyword_type = getattr(KeywordType, match.group().upper(), None)  # Získání KeywordType hodnoty
                     if keyword_type is not None:
                         yield Token(TokenType.KEYWORD, keyword_type)
                     else:
-                        raise ScannerException(f"Unknown keyword {keyword.group().upper()}")
-                else :
-                    yield Token(TokenType.LABEL, value)
-            elif kind == "UNKNOWN":
-                raise ScannerException(f"Lexikalni chyba {value}")
+                        raise ScannerException(f"Unknown keyword {match.group().upper()}")
+            elif self.context == LexerContext.TYPE:
+                match = re.match(self.typeRegex, value)
+                if match:
+                    yield Token(TokenType.TYPE, value)
+
+            if match is None:
+                raise ScannerException(f"Lexikalniii chyba {value}")
+
+    def setContext(self, lexContext):
+        self.context = lexContext
 
     def openFile(self):
         f = open(self.file, "r")
