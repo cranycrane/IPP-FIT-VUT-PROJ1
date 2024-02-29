@@ -5,7 +5,7 @@ import sys
 import argparse
 from exceptions import *
 
-class Syntax:
+class Parse:
     def __init__(self, file):
         self.file = file
         self.scanner = iter(Scanner(self.file))
@@ -141,7 +141,7 @@ class Syntax:
         return next(self.scanner, Token(TokenType.EOF))
 
 
-parser = Syntax(sys.stdin)
+parser = Parse(sys.stdin)
 try:
     parser.parse()
 except WrongHeaderException as err:
@@ -151,5 +151,8 @@ except SyntaxErrorException as err:
     print(err, file=sys.stderr)
     sys.exit(22)
 except OtherErrorException as err:
+    print(err, file=sys.stderr)
+    sys.exit(23)
+except ScannerException as err:
     print(err, file=sys.stderr)
     sys.exit(23)
