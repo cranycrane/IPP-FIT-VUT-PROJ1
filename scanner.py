@@ -116,7 +116,7 @@ class Scanner:
         for mo in re.finditer(self.wordsRegex, self.file_content_without_comments):
             kind = mo.lastgroup
             value = mo.group()
-            #print(f"{value} a {kind} a {self.context}")
+
             if kind == "COMMENT" or kind == "WHITESPACE":
                 continue
             if kind == "NEWLINE" and (self.context == LexerContext.OPCODE or self.context == LexerContext.HEADER):
@@ -130,7 +130,6 @@ class Scanner:
             elif self.context == LexerContext.CONST:
                 match = re.match(self.varRegex, value)
                 if match:
-                    #print("NASEL")
                     yield Token(TokenType.VAR, value)
                     continue
 

@@ -31,7 +31,6 @@ class Parse:
         try:
             self.scanner.setContext(LexerContext.HEADER)
             header = self.getToken()
-            #print("\nVRACIm\n")
             if header.tokenType == TokenType.NEWLINE:
                 header = self.getToken()
         except ScannerException:
@@ -43,7 +42,6 @@ class Parse:
         token = self.checkOpcode()
         while token.tokenType != TokenType.EOF:
             tokenType = token.tokenType
-            #print(token.tokenType)
             if tokenType == TokenType.NEWLINE:
                 token = self.checkOpcode()
                 continue
@@ -106,15 +104,7 @@ class Parse:
             if token.tokenType != TokenType.NEWLINE and token.tokenType != TokenType.EOF:
                 raise OtherErrorException(f"Chyba: Syntakticka chyba, ocekavan novy radek, ziskal {token.tokenType}, {token.value}")
         except ScannerException as e:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba VAR, got: {e}")
-        return token
-
-    def checkToken(self, lexContext):
-        self.scanner.setContext(lexContext)
-        try:
-            token = self.getToken()
-        except ScannerException as e:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba VAR, got: {e}")
+            raise OtherErrorException(f"Chyba: Syntakticka chyba NewLine, got: {e}")
         return token
 
     def checkVar(self):
@@ -130,7 +120,7 @@ class Parse:
         try:
             token = self.getToken()
         except ScannerException as e:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba VAR, got: {e}")
+            raise OtherErrorException(f"Chyba: Syntakticka chyba SYMB, got: {e}")
         return token
 
 
@@ -139,7 +129,7 @@ class Parse:
         try:
             token = self.getToken()
         except ScannerException as e:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba VAR, got: {e}")
+            raise OtherErrorException(f"Chyba: Syntakticka chyba LABEL, got: {e}")
         return token
 
 
@@ -148,7 +138,7 @@ class Parse:
         try:
             token = self.getToken()
         except ScannerException as e:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba VAR, got: {e}")
+            raise OtherErrorException(f"Chyba: Syntakticka chyba TYPE, got: {e}")
         return token
 
 
