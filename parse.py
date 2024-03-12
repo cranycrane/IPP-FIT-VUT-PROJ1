@@ -1,36 +1,37 @@
-from scanner import Scanner, TokenType, KeywordType, Token
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
+from scanner import Scanner, TokenType, KeywordType, Token, LexerContext
+from xmlgenerator import XmlGenerator
 import sys
-import argparse
 from exceptions import *
 
 class Parse:
     def __init__(self, file):
         self.file = file
-        self.scanner = iter(Scanner(self.file))
+        self.scanner = Scanner(self.file)
+        self.scannerIter = iter(self.scanner)
         self.counter = 1
-
-    def initXML(self):
-        self.root = ET.Element("program")
-        self.root.set("language", "IPPcode24")
+        self.xmlgenerator = XmlGenerator()
     
-    def addTreeElement(self, opcode, *argv):
-        instruction = ET.SubElement(self.root, "instruction", order=str(self.counter), opcode=f"{opcode.name}")
-        self.counter +=1
-        for i, arg in enumerate(argv):
-            child = ET.SubElement(instruction, f"arg{i+1}", type=self.getArgType(arg))
-            child.text = arg.value
-
-    def getArgType(self, token):
-        tokenTypeStr = token.tokenType.name
-        return tokenTypeStr.lower()
-    def parse(self):
-        self.initXML()
-
+    def execute(self):
         try:
+            self.parse()
+        except WrongHeaderException as err:
+            print(err, file=sys.stderr)
+            sys.exit(21)
+        except SyntaxErrorException as err:
+            print(err, file=sys.stderr)
+            sys.exit(22)
+        except OtherErrorException as err:
+            print(err, file=sys.stderr)
+            sys.exit(23)
+        except ScannerException as err:
+            print(err, file=sys.stderr)
+            sys.exit(23)
+
+    def parse(self):
+        try:
+            self.scanner.setContext(LexerContext.HEADER)
             header = self.getToken()
-            while header.tokenType == TokenType.NEWLINE:
+            if header.tokenType == TokenType.NEWLINE:
                 header = self.getToken()
         except ScannerException:
             raise WrongHeaderException("Chybna hlavicka IPPCode")
@@ -38,121 +39,125 @@ class Parse:
         if header is None or header.tokenType != TokenType.HEADER:
             raise WrongHeaderException('Chybejici hlavicka')
 
-        for token in self.scanner:
+        token = self.checkOpcode()
+        while token.tokenType != TokenType.EOF:
             tokenType = token.tokenType
-            #print(token.tokenType)
             if tokenType == TokenType.NEWLINE:
+                token = self.checkOpcode()
                 continue
             elif tokenType != TokenType.KEYWORD:
-                raise SyntaxErrorException(f"Syntakticka chyba, ocekavan OPCode, dostal {tokenType}")
+                raise OtherErrorException(f"Syntakticka chyba, ocekavan OPCode, dostal {tokenType}")
 
             self.processKeyword(token.value)
+            token = self.checkOpcode()
 
-        self.generateXML()
-    
-    def generateXML(self):
-        prettyTree = self.prettify(self.root)
-        print(prettyTree)
-        with open("output.xml", "w") as f:
-            f.write(prettyTree)
-
-    def prettify(self, element):
-        """Vrátí formátovaný řetězec XML pro daný element ET."""
-        rough_string = ET.tostring(element, 'utf-8')
-        reparsed = minidom.parseString(rough_string)
-        return reparsed.toprettyxml(indent="  ")
+        self.xmlgenerator.generateXML()
 
     def processKeyword(self, keywordType):
         if keywordType in [KeywordType.MOVE, KeywordType.INT2CHAR, KeywordType.STRLEN, KeywordType.TYPE, KeywordType.NOT]:
-            varToken = self.getToken()
-            self.checkVar(varToken)
-            symbToken = self.getToken()
-            self.checkSymb(symbToken)
-            self.addTreeElement(keywordType, varToken, symbToken)
+            varToken = self.checkVar()
+            symbToken = self.checkSymb()
+            self.xmlgenerator.addTreeElement(keywordType, varToken, symbToken)
         elif keywordType in [KeywordType.CREATEFRAME, KeywordType.PUSHFRAME, KeywordType.POPFRAME, KeywordType.RETURN, KeywordType.BREAK]:
-            self.checkNewLine()
-            self.addTreeElement(keywordType)
+            self.xmlgenerator.addTreeElement(keywordType)
         elif keywordType in [KeywordType.DEFVAR, KeywordType.POPS]:
-            varToken = self.getToken()
-            self.checkVar(varToken)
-            self.addTreeElement(keywordType, varToken)
+            varToken = self.checkVar()
+            self.xmlgenerator.addTreeElement(keywordType, varToken)
         elif keywordType in [KeywordType.CALL, KeywordType.LABEL, KeywordType.JUMP]:
-            labelToken = self.getToken()
-            self.checkLabel(labelToken)
-            self.addTreeElement(keywordType, labelToken)
+            labelToken = self.checkLabel()
+            self.xmlgenerator.addTreeElement(keywordType, labelToken)
         elif keywordType in [KeywordType.JUMPIFEQ, KeywordType.JUMPIFNEQ]:
-            labelToken = self.getToken()
-            self.checkLabel(labelToken)
-            symbToken1 = self.getToken()
-            self.checkSymb(symbToken1)
-            symbToken2 = self.getToken()
-            self.checkSymb(symbToken2)
-            self.addTreeElement(keywordType, labelToken, symbToken1, symbToken2)
+            labelToken = self.checkLabel()
+            symbToken1 = self.checkSymb()
+            symbToken2 = self.checkSymb()
+            self.xmlgenerator.addTreeElement(keywordType, labelToken, symbToken1, symbToken2)
         elif keywordType in [KeywordType.PUSHS, KeywordType.WRITE, KeywordType.EXIT, KeywordType.DPRINT]:
-            symbToken = self.getToken()
-            self.checkSymb(symbToken)
-            self.addTreeElement(keywordType, symbToken)
+            symbToken = self.checkSymb()
+            self.xmlgenerator.addTreeElement(keywordType, symbToken)
         elif keywordType in [KeywordType.ADD, KeywordType.SUB, KeywordType.MUL, KeywordType.IDIV, 
                             KeywordType.LT, KeywordType.GT, KeywordType.EQ, KeywordType.AND, 
                             KeywordType.OR, KeywordType.STRI2INT, KeywordType.CONCAT,
-                            KeywordType.CONCAT]:
-            varToken = self.getToken()
-            self.checkVar(varToken)
-            symbToken = self.getToken()
-            self.checkSymb(symbToken)
-            symbToken2 = self.getToken()
-            self.checkSymb(symbToken2)
-            self.addTreeElement(keywordType, varToken, symbToken, symbToken2)
+                            KeywordType.GETCHAR, KeywordType.SETCHAR]:
+            varToken = self.checkVar()
+            symbToken = self.checkSymb()
+            symbToken2 = self.checkSymb()
+            self.xmlgenerator.addTreeElement(keywordType, varToken, symbToken, symbToken2)
         elif keywordType == KeywordType.READ:
-            varToken = self.getToken()
-            self.checkVar(varToken)
-            typeToken = self.getToken()
-            self.checkType(typeToken)
-            self.addTreeElement(keywordType, varToken, typeToken)
-            pass
+            varToken = self.checkVar()
+            typeToken = self.checkType()
+            self.xmlgenerator.addTreeElement(keywordType, varToken, typeToken)
         else:
             raise SyntaxErrorException(f"Chybny nebo chybejici OPCode {keywordType}")
-    
+
+    def checkOpcode(self):
+        self.scanner.setContext(LexerContext.OPCODE)
+        try:
+            self.checkNewLine()
+            token = self.getToken()
+        except ScannerException as e:
+            raise SyntaxErrorException(f"Chyba: OPCode chyba, got: {e}")
+        return token
+
     def checkNewLine(self):
-        token = self.getToken()
-        if token.tokenType != TokenType.NEWLINE:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba, ocekavan novy radek, ziskal {token.tokenType}")
-    
-    def checkVar(self, token):
-        if token.tokenType != TokenType.VAR:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba VAR, got {token.tokenType}, {token.value}")
+        try:
+            token = self.getToken()
+            if token.tokenType != TokenType.NEWLINE and token.tokenType != TokenType.EOF:
+                raise OtherErrorException(f"Chyba: Syntakticka chyba, ocekavan novy radek, ziskal {token.tokenType}, {token.value}")
+        except ScannerException as e:
+            raise OtherErrorException(f"Chyba: Syntakticka chyba NewLine, got: {e}")
+        return token
 
-    def checkSymb(self, token):
-        if token.tokenType not in [TokenType.VAR, TokenType.INT, TokenType.BOOL, TokenType.STRING, TokenType.NIL]:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba SYMB, got {token.tokenType}, {token.value}")
+    def checkVar(self):
+        self.scanner.setContext(LexerContext.VAR)
+        try:
+            token = self.getToken()
+        except ScannerException as e:
+            raise OtherErrorException(f"Chyba: Syntakticka chyba VAR, got: {e}")
+        return token
 
-    def checkLabel(self, token):
-        if token.tokenType == TokenType.TYPE:
-            token.tokenType = TokenType.LABEL
+    def checkSymb(self):
+        self.scanner.setContext(LexerContext.CONST)
+        try:
+            token = self.getToken()
+        except ScannerException as e:
+            raise OtherErrorException(f"Chyba: Syntakticka chyba SYMB, got: {e}")
+        return token
 
-        if token.tokenType != TokenType.LABEL:
-            raise OtherErrorException(f"Chyba: Syntakticka chyba LABEL, {token.tokenType}")
 
-    def checkType(self, token):
-        if token.tokenType != TokenType.TYPE:
-            raise OtherErrorException('Chyba: Syntakticka chyba TYPE')
+    def checkLabel(self):
+        self.scanner.setContext(LexerContext.LABEL)
+        try:
+            token = self.getToken()
+        except ScannerException as e:
+            raise OtherErrorException(f"Chyba: Syntakticka chyba LABEL, got: {e}")
+        return token
+
+
+    def checkType(self):
+        self.scanner.setContext(LexerContext.TYPE)
+        try:
+            token = self.getToken()
+        except ScannerException as e:
+            raise OtherErrorException(f"Chyba: Syntakticka chyba TYPE, got: {e}")
+        return token
+
 
     def getToken(self):
-        return next(self.scanner, Token(TokenType.EOF))
+        return next(self.scannerIter, Token(TokenType.EOF))
+ 
+
+if __name__ == "__main__":
+    if len(sys.argv) > 2:
+        print("Chyba: Bylo zadano prilis mnoho argumentu!")
+        sys.exit(10)
+
+    if "--help" in sys.argv:
+        print("""IPPCode24 Parser, Version 1.0, FIT VUT Brno, Autor: Jakub Jerabek (xjerab28)
+- Prijima na standardni vstup zdrojovy kod v jazyku IPPCode24
+- V pripade chyby ve zdrojovem kodu, ukoncuje program s odpovidajici hlaskou
+a navratovym kodem, dle specifikace""")
+        sys.exit()
 
 
 parser = Parse(sys.stdin)
-try:
-    parser.parse()
-except WrongHeaderException as err:
-    print(err, file=sys.stderr)
-    sys.exit(21)
-except SyntaxErrorException as err:
-    print(err, file=sys.stderr)
-    sys.exit(22)
-except OtherErrorException as err:
-    print(err, file=sys.stderr)
-    sys.exit(23)
-except ScannerException as err:
-    print(err, file=sys.stderr)
-    sys.exit(23)
+parser.execute()
