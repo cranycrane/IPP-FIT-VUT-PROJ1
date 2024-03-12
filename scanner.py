@@ -69,18 +69,12 @@ class Token:
         self.tokenType = type
         self.value = value
 
-    def getType(self):
-        return self.tokenType
-
-    def getValue(self):
-        return self.value
-
 
 class Scanner:
     def __init__(self, file):
         self.file = file
         self.context = None
-        # Definice regulárních výrazů pro různé typy tokenů
+        # Definice reg. vyrazu
         self.wordRegex = [
             ("COMMENT", r'(#.*)'),
             ("WORD", r'([^\s#]+)'),
@@ -111,20 +105,14 @@ class Scanner:
                             r'JUMPIFEQ|JUMPIFNEQ|EXIT|DPRINT|BREAK)$'
         self.keywordRegex = re.compile(keywords)
 
-        # Kompilace regulárních výrazů do patternů
-        #self.tok_regex = '|'.join('(?P<%s>%s)' % pair for pair in self.token_specs)
         self.wordsRegex = '|'.join('(?P<%s>%s)' % pair for pair in self.wordRegex)
-        # Přečtěte celý soubor do proměnné
+
         file_content = self.file.read()
 
-        # Odstraňte komentáře z obsahu souboru
-        # Tento regulární výraz najde komentáře začínající # a odstraní je i s následujícími bílými znaky až do konce řádku
         self.file_content_without_comments = re.sub(r'#.*', '', file_content)
-        #print(self.file_content_without_comments)
-    # Funkce lexikálního analyzátoru
+
     def __iter__(self):
         
-        # Nyní iterujte přes upravený obsah souboru bez komentářů
         for mo in re.finditer(self.wordsRegex, self.file_content_without_comments):
             kind = mo.lastgroup
             value = mo.group()

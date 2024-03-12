@@ -1,4 +1,0 @@
-IPPCode24 Parser, Version 1.0, FIT VUT Brno, Autor: Jakub Jerabek (xjerab28)
-- Prijima na standardni vstup zdrojovy kod v jazyku IPPCode24
-- V pripade chyby ve zdrojovem kodu, ukoncuje program s odpovidajici hlaskou
-  a navratovym kodem, dle specifikace

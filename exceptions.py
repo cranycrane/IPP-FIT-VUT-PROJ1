@@ -6,6 +6,3 @@ class SyntaxErrorException(Exception):
     pass
 class OtherErrorException(Exception):
     pass
-
-class KeywordException(Exception):
-    pass
