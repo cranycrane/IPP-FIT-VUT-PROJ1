@@ -1,3 +1,6 @@
+Hodnocení: 6.7/7 bodů
+
+
 Implementační dokumentace k 1. úloze do IPP 2023/2024\
 Jméno a příjmení: Jakub Jeřábek\
 Login: xjerab28
